@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WEB打刻システム</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 20px; background-color: #f4f7f6; }
+        .container { max-width: 400px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        select { width: 100%; padding: 10px; margin-bottom: 20px; font-size: 16px; border-radius: 4px; border: 1px solid #ccc; }
+        button { width: 48%; padding: 15px; font-size: 18px; font-weight: bold; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        .btn-in { background-color: #4CAF50; }
+        .btn-out { background-color: #f44336; float: right; }
+        #status { margin-top: 20px; font-weight: bold; color: #333; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>WEB打刻</h2>
+    
+    <label for="staffName">名前を選択：</label>
+    <select id="staffName">
+        <option value="">名簿を読み込み中...</option>
+    </select>
+
+    <div>
+        <button class="btn-in" onclick="recordTime('in')">出勤</button>
+        <button class="btn-out" onclick="recordTime('out')">退勤</button>
+    </div>
+
+    <p id="status"></p>
+</div>
+
+<script>
+    // ★先ほどコピーしたGASのウェブアプリURLをここに貼り付けてください
+    const GAS_URL = 'YOUR_GAS_WEB_APP_URL_HERE'; 
+
+    // 画面が読み込まれたらスプレッドシートから名簿を取得する
+    document.addEventListener('DOMContentLoaded', () => {
+        fetch(`${GAS_URL}?action=getNames`)
+            .then(response => response.json())
+            .then(names => {
+                const selectEl = document.getElementById('staffName');
+                selectEl.innerHTML = '<option value="">選択してください</option>'; // 初期化
+                
+                names.forEach(name => {
+                    const option = document.createElement('option');
+                    option.value = name;
+                    option.textContent = name;
+                    selectEl.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error("名簿取得エラー:", error);
+                document.getElementById('staffName').innerHTML = '<option value="">読み込み失敗</option>';
+            });
+    });
+
+    // 打刻処理（位置情報取得とデータ送信）
+    function recordTime(type) {
+        const name = document.getElementById('staffName').value;
+        const statusEl = document.getElementById('status');
+
+        if (!name) {
+            statusEl.textContent = "※名前を選択してください";
+            statusEl.style.color = "red";
+            return;
+        }
+
+        statusEl.textContent = "位置情報を取得中...";
+        statusEl.style.color = "blue";
+
+        if (!navigator.geolocation) {
+            statusEl.textContent = "お使いの端末は位置情報に対応していません。";
+            statusEl.style.color = "red";
+            return;
+        }
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                sendData(name, type, lat, lng);
+            },
+            (error) => {
+                statusEl.textContent = "位置情報の取得に失敗しました。";
+                statusEl.style.color = "red";
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    }
+
+    function sendData(name, type, lat, lng) {
+        const statusEl = document.getElementById('status');
+        statusEl.textContent = "データ送信中...";
+
+        // action=record を付与して送信
+        const url = `${GAS_URL}?action=record&name=${encodeURIComponent(name)}&type=${type}&lat=${lat}&lng=${lng}`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(result => {
+                const typeText = type === 'in' ? '出勤' : '退勤';
+                statusEl.textContent = `${name}さんの${typeText}を記録しました！`;
+                statusEl.style.color = "green";
+                
+                setTimeout(() => {
+                    statusEl.textContent = "";
+                    document.getElementById('staffName').value = "";
+                }, 3000);
+            })
+            .catch((error) => {
+                statusEl.textContent = "通信エラーが発生しました。";
+                statusEl.style.color = "red";
+            });
+    }
+</script>
+
+</body>
+</html>
