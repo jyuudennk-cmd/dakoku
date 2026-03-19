@@ -19,9 +19,14 @@
 <div class="container">
     <h2>WEB打刻</h2>
     
+    <label for="areaSelect">エリアを選択：</label>
+    <select id="areaSelect" onchange="updateNames()">
+        <option value="">データを読み込み中...</option>
+    </select>
+
     <label for="staffName">名前を選択：</label>
     <select id="staffName">
-        <option value="">名簿を読み込み中...</option>
+        <option value="">先にエリアを選択してください</option>
     </select>
 
     <div>
@@ -33,28 +38,49 @@
 </div>
 
 <script>
-  const GAS_URL = 'https://script.google.com/macros/s/AKfycbx5y8vvYZratAOYXlmATKQvO9A9fJAG9m_UrbY5xkMTsw4m53mnACyZb8HKh9v7Wajv/exec';
+    // https://script.google.com/macros/s/AKfycbx5y8vvYZratAOYXlmATKQvO9A9fJAG9m_UrbY5xkMTsw4m53mnACyZb8HKh9v7Wajv/exec
+    const GAS_URL = 'YOUR_GAS_WEB_APP_URL_HERE'; 
+    let rosterData = {}; 
 
-    // 画面が読み込まれたらスプレッドシートから名簿を取得する
+    // 画面読み込み時にスプレッドシートから名簿（エリアと名前）を取得
     document.addEventListener('DOMContentLoaded', () => {
         fetch(`${GAS_URL}?action=getNames`)
             .then(response => response.json())
-            .then(names => {
-                const selectEl = document.getElementById('staffName');
-                selectEl.innerHTML = '<option value="">選択してください</option>'; // 初期化
+            .then(data => {
+                rosterData = data; 
+                const areaSelect = document.getElementById('areaSelect');
+                areaSelect.innerHTML = '<option value="">エリアを選択してください</option>';
                 
-                names.forEach(name => {
+                // エリアのプルダウンを作成
+                Object.keys(rosterData).forEach(area => {
                     const option = document.createElement('option');
-                    option.value = name;
-                    option.textContent = name;
-                    selectEl.appendChild(option);
+                    option.value = area;
+                    option.textContent = area;
+                    areaSelect.appendChild(option);
                 });
             })
             .catch(error => {
                 console.error("名簿取得エラー:", error);
-                document.getElementById('staffName').innerHTML = '<option value="">読み込み失敗</option>';
+                document.getElementById('areaSelect').innerHTML = '<option value="">読み込み失敗</option>';
             });
     });
+
+    // エリアが選択されたら、名前のプルダウンを連動して切り替える
+    function updateNames() {
+        const selectedArea = document.getElementById('areaSelect').value;
+        const nameSelect = document.getElementById('staffName');
+        
+        nameSelect.innerHTML = '<option value="">名前を選択してください</option>';
+        
+        if (selectedArea && rosterData[selectedArea]) {
+            rosterData[selectedArea].forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                nameSelect.appendChild(option);
+            });
+        }
+    }
 
     // 打刻処理（位置情報取得とデータ送信）
     function recordTime(type) {
@@ -62,7 +88,7 @@
         const statusEl = document.getElementById('status');
 
         if (!name) {
-            statusEl.textContent = "※名前を選択してください";
+            statusEl.textContent = "※エリアと名前を選択してください";
             statusEl.style.color = "red";
             return;
         }
@@ -71,7 +97,7 @@
         statusEl.style.color = "blue";
 
         if (!navigator.geolocation) {
-            statusEl.textContent = "お使いの端末は位置情報に対応していません。";
+            statusEl.textContent = "端末が位置情報に対応していません。";
             statusEl.style.color = "red";
             return;
         }
@@ -94,7 +120,6 @@
         const statusEl = document.getElementById('status');
         statusEl.textContent = "データ送信中...";
 
-        // action=record を付与して送信
         const url = `${GAS_URL}?action=record&name=${encodeURIComponent(name)}&type=${type}&lat=${lat}&lng=${lng}`;
 
         fetch(url)
@@ -104,9 +129,11 @@
                 statusEl.textContent = `${name}さんの${typeText}を記録しました！`;
                 statusEl.style.color = "green";
                 
+                // 送信完了後、画面を初期状態に戻す
                 setTimeout(() => {
                     statusEl.textContent = "";
-                    document.getElementById('staffName').value = "";
+                    document.getElementById('areaSelect').value = "";
+                    document.getElementById('staffName').innerHTML = '<option value="">先にエリアを選択してください</option>';
                 }, 3000);
             })
             .catch((error) => {
